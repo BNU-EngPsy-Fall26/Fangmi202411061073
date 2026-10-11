@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>信号检测实验 · 红外相机监测系统</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        background: radial-gradient(ellipse at top, #0d1b2a 0%, #050810 100%);
+        color: #d4e4f0;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        padding: 28px 18px;
+        font-size: 15.5px;
+    }
+    .app { width: 100%; max-width: 1080px; }
+
+    /* ===== Tab ===== */
+    .tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 22px; flex-wrap: wrap; }
+    .tab {
+        padding: 12px 26px; font-size: 15px; font-weight: 700;
+        background: rgba(20,35,55,0.6); border: 1px solid rgba(90,140,180,0.25);
+        color: #8fa9bd; border-radius: 10px; cursor: pointer; transition: all 0.2s;
+    }
+    .tab:hover { color: #c9e4ff; }
+    .tab.active {
+        background: linear-gradient(135deg, #1976d2, #0d47a1);
+        color: #fff; border-color: #1976d2;
+        box-shadow: 0 4px 16px rgba(25,118,210,0.5);
+    }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    header { text-align: center; margin-bottom: 24px; }
+    header h1 {
+        font-size: 28px; font-weight: 700;
+        background: linear-gradient(90deg, #ff9a3c, #ffd86b, #4ade80);
+        -webkit-background-clip: text; background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 12px;
+    }
+    header p { font-size: 15px; color: #8fa9bd; line-height: 1.7; }
+
+    .panel {
+        background: rgba(20,35,55,0.55); border: 1px solid rgba(90,140,180,0.18);
+        padding: 20px 24px; border-radius: 14px; margin-bottom: 18px;
+        backdrop-filter: blur(8px);
+    }
+    .panel h3 {
+        font-size: 17px; color: #ffd86b; margin-bottom: 14px;
+        padding-bottom: 10px; border-bottom: 1px solid rgba(90,140,180,0.15);
+    }
+
+    /* ===== 参数滑块 ===== */
+    .param-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .param label { display: block; font-size: 14.5px; color: #a8bcd0; margin-bottom: 10px; }
+    .param label .v {
+        color: #ffd86b; font-weight: 700;
+        font-family: 'Consolas', monospace; font-size: 16px;
+    }
+    .param input[type=range] {
+        width: 100%; accent-color: #ff9a3c; cursor: pointer; height: 6px;
+    }
+    .param input[type=range]:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ===== 定义卡片 ===== */
+    .def-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px;
+        font-size: 14.5px; color: #b8c9d8; line-height: 1.8;
+    }
+    .def-grid b { color: #4ade80; }
+    .def-grid .sig { color: #ff9a3c; }
+    .def-grid .noi { color: #4fc3f7; }
+
+    /* ===== 试次选择 ===== */
+    .trial-picker { display: flex; gap: 10px; flex-wrap: wrap; }
+    .trial-btn {
+        padding: 12px 24px; font-size: 15px; font-weight: 700;
+        background: rgba(20,35,55,0.7); color: #8fa9bd;
+        border: 1px solid rgba(90,140,180,0.25); border-radius: 10px;
+        cursor: pointer; transition: all 0.15s;
+    }
+    .trial-btn:hover { color: #c9e4ff; border-color: #4fc3f7; }
+    .trial-btn.active {
+        background: linear-gradient(135deg, #ff9a3c, #e85d04);
+        color: #fff; border-color: #ff9a3c;
+        box-shadow: 0 4px 14px rgba(255,154,60,0.5);
+    }
+
+    /* ===== 监控画面 ===== */
+    .monitor {
+        position: relative; border-radius: 16px; overflow: hidden; background: #000;
+        border: 1px solid rgba(90,140,180,0.25);
+        box-shadow: 0 0 40px rgba(0,0,0,0.6), inset 0 0 60px rgba(20,50,80,0.3);
+        margin-bottom: 18px;
+    }
+    canvas#screen { display: block; width: 100%; height: 380px; }
+
+    .hud {
+        position: absolute; font-family: 'Consolas', monospace; font-size: 13px;
+        color: #4ade80; text-shadow: 0 0 6px rgba(74,222,128,0.6);
+        letter-spacing: 0.6px; pointer-events: none;
+    }
+    .hud.tl { top: 12px; left: 16px; }
+    .hud.tr { top: 12px; right: 16px; }
+    .hud.bl { bottom: 14px; left: 16px; color: #ff9a3c; text-shadow: 0 0 6px rgba(255,154,60,0.6); }
+
+    .status {
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%,-50%);
+        font-size: 17px; font-weight: 600; text-align: center;
+        padding: 16px 30px; border-radius: 12px;
+        background: rgba(0,0,0,0.75); border: 1px solid rgba(90,140,180,0.4);
+        color: #c9e4ff; text-shadow: 0 0 10px rgba(120,180,240,0.5);
+        pointer-events: none; max-width: 82%; line-height: 1.7;
+        transition: opacity 0.3s; opacity: 0;
+    }
+    .status.show { opacity: 1; }
+
+    .feedback {
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%,-50%) scale(0.85);
+        padding: 24px 40px; border-radius: 16px; font-size: 22px; font-weight: 700;
+        text-align: center; background: rgba(10,15,25,0.95); border: 2px solid;
+        opacity: 0; transition: all 0.3s cubic-bezier(0.2,0.9,0.3,1.3);
+        pointer-events: none; line-height: 1.6; max-width: 85%;
+    }
+    .feedback.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    .feedback .sub { display: block; font-size: 14.5px; font-weight: 400; color: #8fa9bd; margin-top: 10px; }
+    .fb-hit, .fb-cr { border-color: #4ade80; color: #4ade80; text-shadow: 0 0 12px rgba(74,222,128,0.5); }
+    .fb-miss { border-color: #ef4444; color: #ef4444; text-shadow: 0 0 12px rgba(239,68,68,0.5); }
+    .fb-fa   { border-color: #f59e0b; color: #f59e0b; text-shadow: 0 0 12px rgba(245,158,11,0.5); }
+
+    .timer-bar {
+        position: absolute; bottom: 0; left: 0; height: 5px; width: 0%;
+        background: linear-gradient(90deg, #ff9a3c, #ffd86b);
+        box-shadow: 0 0 10px rgba(255,154,60,0.8);
+    }
+
+    /* ===== 按钮 ===== */
+    .actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    button {
+        padding: 16px 38px; font-size: 16px; font-weight: 700;
+        border: none; border-radius: 10px; cursor: pointer;
+        transition: all 0.15s ease; font-family: inherit; letter-spacing: 0.4px;
+    }
+    button:active:not(:disabled) { transform: scale(0.96); }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-start {
+        background: linear-gradient(135deg, #1976d2, #0d47a1);
+        color: #fff; box-shadow: 0 4px 16px rgba(25,118,210,0.4);
+    }
+    .btn-start:hover:not(:disabled) { box-shadow: 0 6px 22px rgba(25,118,210,0.65); }
+
+    .btn-yes {
+        background: linear-gradient(135deg, #ff9a3c, #e85d04);
+        color: #fff; box-shadow: 0 4px 16px rgba(255,154,60,0.4); min-width: 220px;
+    }
+    .btn-yes:hover:not(:disabled) { box-shadow: 0 6px 22px rgba(255,154,60,0.65); }
+
+    .btn-no {
+        background: linear-gradient(135deg, #4ade80, #16a34a);
+        color: #04210f; box-shadow: 0 4px 16px rgba(74,222,128,0.35); min-width: 220px;
+    }
+    .btn-no:hover:not(:disabled) { box-shadow: 0 6px 22px rgba(74,222,128,0.6); }
+
+    /* ===== 结果面板 ===== */
+    .grid4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; }
+    .card {
+        background: rgba(10,20,35,0.7); border: 1px solid rgba(90,140,180,0.15);
+        padding: 14px 10px; border-radius: 10px; text-align: center;
+    }
+    .card .lbl { font-size: 13px; color: #7a95ab; margin-bottom: 8px; }
+    .card .val {
+        font-size: 22px; font-weight: 700; color: #ffd86b;
+        font-family: 'Consolas', monospace;
+    }
+    .accuracy {
+        text-align: center; font-size: 16px; padding: 16px;
+        background: rgba(255,216,107,0.08); border-radius: 12px;
+        border: 1px solid rgba(255,216,107,0.2); margin-bottom: 24px;
+    }
+    .accuracy span { color: #ffd86b; font-weight: 700; font-size: 24px; }
+
+    canvas.chart {
+        display: block; margin: 0 auto; background: #0a1420;
+        border-radius: 12px; border: 1px solid rgba(90,140,180,0.15); max-width: 100%;
+    }
+    .legend {
+        display: flex; justify-content: center; gap: 24px; font-size: 13.5px;
+        color: #7a95ab; margin-top: 12px; flex-wrap: wrap;
+    }
+    .legend i {
+        display: inline-block; width: 16px; height: 3px;
+        vertical-align: middle; margin-right: 8px; border-radius: 2px;
+    }
+    .legend .noise i { background: #4ade80; }
+    .legend .signal i { background: #ff6b3d; }
+    .legend .crit i { background: #4fc3f7; }
+    .legend .best i { background: #ffd86b; }
+    .legend .roc i { background: #ffd86b; }
+
+    /* ===== 概念可视化布局（参考截图） ===== */
+    .concept-grid {
+        display: grid;
+        grid-template-columns: 1.05fr 1fr;
+        gap: 18px;
+    }
+    @media (max-width: 900px) {
+        .concept-grid { grid-template-columns: 1fr; }
+        .param-grid, .def-grid, .grid4 { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* 混淆矩阵样式（参考截图） */
+    .cm-wrap { padding: 4px; }
+    .cm {
+        width: 100%; border-collapse: collapse; margin-top: 4px;
+        font-family: 'Consolas', monospace;
+    }
+    .cm td, .cm th {
+        border: 1px solid rgba(90,140,180,0.3);
+        padding: 12px 10px; text-align: center;
+        font-size: 15px; font-weight: 600;
+    }
+    .cm .corner {
+        background: #1e3a5f; color: #b8c9d8;
+        font-weight: 700; font-size: 14px;
+    }
+    .cm .hdr {
+        background: #1e3a5f; color: #c9e4ff;
+        font-weight: 700; font-size: 15px;
+    }
+    .cm .cell-hit {
+        background: rgba(74,222,128,0.18); color: #4ade80;
+    }
+    .cm .cell-miss {
+        background: rgba(239,68,68,0.16); color: #f87171;
+    }
+    .cm .cell-fa {
+        background: rgba(245,158,11,0.16); color: #fbbf24;
+    }
+    .cm .cell-cr {
+        background: rgba(79,195,247,0.16); color: #7dd3fc;
+    }
+
+    /* 指标卡（参考截图 2x2 布局） */
+    .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-top: 8px;
+    }
+    .metric {
+        background: rgba(20,35,55,0.6);
+        border: 1px solid rgba(90,140,180,0.2);
+        border-radius: 12px;
+        padding: 14px 8px;
+        text-align: center;
+    }
+    .metric .m-lbl {
+        font-size: 13.5px; color: #8fa9bd;
+        margin-bottom: 8px; font-weight: 600;
+    }
+    .metric .m-val {
+        font-size: 24px; font-weight: 700; color: #ffd86b;
+        font-family: 'Consolas', monospace;
+        letter-spacing: 0.5px;
+    }
+    .metric.wide { grid-column: span 3; }
+    .metric.wide .m-val { font-size: 26px; }
+
+    /* 解读文字 */
+    .interpret {
+        margin-top: 18px;
+        padding: 16px 18px;
+        background: rgba(79,195,247,0.08);
+        border-left: 3px solid #4fc3f7;
+        border-radius: 6px;
+        font-size: 14px;
+        color: #b8c9d8;
+        line-height: 1.75;
+    }
+    .interpret b { color: #4fc3f7; }
+
+    /* ===== 排行榜 ===== */
+    .rank-table {
+        width: 100%; border-collapse: collapse; font-size: 14.5px; margin-top: 10px;
+    }
+    .rank-table th, .rank-table td {
+        padding: 12px 14px; text-align: center;
+        border-bottom: 1px solid rgba(90,140,180,0.12);
+    }
+    .rank-table th { color: #ffd86b; font-weight: 700; font-size: 14px; }
+    .rank-table tbody tr:hover { background: rgba(79,195,247,0.06); }
+    .rank-table .medal { font-size: 20px; }
+    .rank-table .empty { padding: 40px; color: #546e7a; text-align: center; font-size: 15px; }
+    .rank-controls { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
+    .btn-danger {
+        background: rgba(239,68,68,0.15); color: #f87171;
+        border: 1px solid rgba(239,68,68,0.4);
+        padding: 10px 22px; font-size: 14px;
+    }
+    .btn-danger:hover { background: rgba(239,68,68,0.25); }
+    .badge {
+        display: inline-block; padding: 3px 10px; border-radius: 6px;
+        font-family: 'Consolas', monospace; font-size: 13.5px; font-weight: 700;
+    }
+    .badge.good { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .badge.mid  { background: rgba(255,216,107,0.15); color: #ffd86b; }
+    .badge.bad  { background: rgba(239,68,68,0.15); color: #f87171; }
+
+    /* ===== 概念页参数与图形 ===== */
+    .viz-row {
+        display: grid;
+        grid-template-columns: 1.1fr 1fr;
+        gap: 18px;
+        margin-top: 6px;
+    }
+    @media (max-width: 900px) {
+        .viz-row { grid-template-columns: 1fr; }
+    }
+    .viz-box { text-align: center; }
+    .viz-box h4 {
+        font-size: 15px; color: #a8bcd0; margin-bottom: 12px; font-weight: 600;
+    }
+    .viz-box p {
+        text-align: center; font-size: 13px; color: #7a95ab;
+        margin-top: 10px; line-height: 1.6;
+    }
+</style>
+</head>
+<body>
+<div class="app">
+
+    <!-- ============ Tabs ============ -->
+    <div class="tabs">
+        <div class="tab active" data-view="view-exp">🧪 实验</div>
+        <div class="tab" data-view="view-concept">📈 概念可视化</div>
+        <div class="tab" data-view="view-rank">🏆 排行榜</div>
+    </div>
+
+    <!-- ============================================================
+         视图 1：实验
+         ============================================================ -->
+    <div class="view active" id="view-exp">
+        <header>
+            <h1>🦌 保护区红外相机监测系统</h1>
+            <p>你是保护区研究员。每一帧红外画面中，目标珍稀动物<strong style="color:#ff9a3c;">可能经过</strong>，<br>也<strong style="color:#4ade80;">可能只是风吹草动</strong>。请尽快判断：这一帧是否有目标动物？</p>
+        </header>
+
+        <section class="panel">
+            <h3>📖 实验说明 · 信号检测论</h3>
+            <div class="def-grid">
+                <div>
+                    <b style="color:#4fc3f7;">🌡️ 噪音 (Noise)：</b><br>
+                    画面上只有环境热源——风吹草动、昆虫飞过、温度波动产生的微弱橙红斑点。<br>
+                    <span class="noi">→ 目标动物<span style="color:#ef4444;">没有</span>出现。</span>
+                </div>
+                <div>
+                    <b style="color:#ff9a3c;">🐾 信号 (Signal)：</b><br>
+                    在杂乱的环境热源中，出现一个<strong>相对更亮、稍大的橙红/黄白热源</strong>——那是目标动物。<br>
+                    <span class="sig">→ 目标动物<span style="color:#4ade80;">出现</span>了。</span>
+                </div>
+            </div>
+            <div class="def-grid" style="margin-top:16px; padding-top:16px; border-top:1px solid rgba(90,140,180,0.12);">
+                <div>
+                    <b>✅ 命中 (Hit)：</b>有动物，你判断“有动物”。<br>
+                    <b>❌ 漏报 (Miss)：</b>有动物，你判断“无动物”。<br>
+                    <b>⚠️ 虚报 (FA)：</b>没动物，你判断“有动物”。<br>
+                    <b>✅ 正确拒绝 (CR)：</b>没动物，你判断“无动物”。
+                </div>
+                <div style="color:#8fa9bd;">
+                    <b style="color:#4fc3f7;">P(S) 先验概率：</b>控制有动物试次的比例。<br>
+                    <b style="color:#4fc3f7;">d' 辨别力：</b>控制动物热源的<strong>亮度和大小</strong>。<br>
+                    d' 越小，热源越暗、越小，越难从杂波中分辨。
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h3>⚙️ 实验参数</h3>
+            <div class="param-grid">
+                <div class="param">
+                    <label>先验概率 P(S) = <span class="v" id="ps-val">0.50</span></label>
+                    <input type="range" id="ps-input" min="0.2" max="0.8" step="0.1" value="0.5">
+                </div>
+                <div class="param">
+                    <label>辨别力 d' = <span class="v" id="dp-val">1.50</span></label>
+                    <input type="range" id="dp-input" min="0.5" max="3.5" step="0.1" value="1.5">
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h3>🔢 选择试次数量（每局最少 20 试次）</h3>
+            <div class="trial-picker" id="trial-picker">
+                <button class="trial-btn" data-n="20">20 试次</button>
+                <button class="trial-btn active" data-n="30">30 试次</button>
+                <button class="trial-btn" data-n="40">40 试次</button>
+                <button class="trial-btn" data-n="50">50 试次</button>
+                <button class="trial-btn" data-n="60">60 试次</button>
+            </div>
+        </section>
+
+        <section class="monitor">
+            <canvas id="screen" width="800" height="380"></canvas>
+            <div class="hud tl">CAM-07 · 保护区东区</div>
+            <div class="hud tr" id="trial-count">— / 30</div>
+            <div class="hud bl" id="clock">—</div>
+            <div class="status" id="status">准备就绪 · 点击下方开始按钮</div>
+            <div class="feedback" id="feedback"></div>
+            <div class="timer-bar" id="timer-bar"></div>
+        </section>
+
+        <div class="actions" id="actions">
+            <button class="btn-start" id="start-btn">▶ 开始监测任务</button>
+            <button class="btn-yes" id="btn-yes" style="display:none;">🐾 有目标动物</button>
+            <button class="btn-no"  id="btn-no"  style="display:none;">🍃 无目标动物</button>
+        </div>
+
+        <section class="panel" id="results" style="display:none; margin-top:24px;">
+            <h3 style="text-align:center; font-size:19px;">📊 监测任务报告</h3>
+            <div class="grid4">
+                <div class="card"><div class="lbl">命中 H</div><div class="val" id="res-hit">0</div></div>
+                <div class="card"><div class="lbl">漏报 M</div><div class="val" id="res-miss">0</div></div>
+                <div class="card"><div class="lbl">虚报 FA</div><div class="val" id="res-fa">0</div></div>
+                <div class="card"><div class="lbl">正确拒绝 CR</div><div class="val" id="res-cr">0</div></div>
+            </div>
+            <div class="grid4">
+                <div class="card"><div class="lbl">P(Hit)</div><div class="val" id="res-phit">—</div></div>
+                <div class="card"><div class="lbl">P(FA)</div><div class="val" id="res-pfa">—</div></div>
+                <div class="card"><div class="lbl">辨别力 d'</div><div class="val" id="res-dprime">—</div></div>
+                <div class="card"><div class="lbl">判断标准 c</div><div class="val" id="res-c">—</div></div>
+            </div>
+            <div class="accuracy">总准确率：<span id="res-acc">—</span></div>
+
+            <div style="text-align:center; font-size:15px; color:#8fa9bd; margin: 20px 0 12px;">信号-噪音分布与判断标准 c</div>
+            <canvas class="chart" id="sdt-canvas" width="620" height="220"></canvas>
+            <div class="legend">
+                <span class="noise"><i></i>噪音分布</span>
+                <span class="signal"><i></i>信号分布</span>
+                <span class="crit"><i></i>判断标准 c</span>
+            </div>
+
+            <div style="text-align:center; margin-top:24px;">
+                <button class="btn-start" id="restart-btn">🔁 再来一局</button>
+            </div>
+        </section>
+    </div>
+
+    <!-- ============================================================
+         视图 2：概念可视化
+         ============================================================ -->
+    <div class="view" id="view-concept">
+        <header>
+            <h1>📈 交互式概念可视化</h1>
+            <p>拖动滑块，实时观察 d'、c、P(S) 如何影响信号/噪音分布、判断标准、ROC 曲线以及混淆矩阵。</p>
+        </header>
+
+        <section class="panel">
+            <h3>🎛️ 参数调节</h3>
+            <div class="param-grid">
+                <div class="param">
+                    <label>辨别力 d' = <span class="v" id="c-dp-val">1.50</span></label>
+                    <input type="range" id="c-dp" min="0.2" max="4.0" step="0.1" value="1.5">
+                </div>
+                <div class="param">
+                    <label>判断标准 c = <span class="v" id="c-c-val">0.00</span></label>
+                    <input type="range" id="c-crit" min="-2.0" max="2.0" step="0.05" value="0">
+                </div>
+                <div class="param">
+                    <label>先验概率 P(S) = <span class="v" id="c-ps-val">0.50</span></label>
+                    <input type="range" id="c-ps" min="0.1" max="0.9" step="0.05" value="0.5">
+                </div>
+                <div class="param">
+                    <label>阴影浓度 = <span class="v" id="c-alpha-val">0.60</span></label>
+                    <input type="range" id="c-alpha" min="0.1" max="1.0" step="0.05" value="0.6">
+                </div>
+            </div>
+            <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(90,140,180,0.12); font-size:13.5px; color:#8fa9bd; line-height:1.75;">
+                💡 <b style="color:#4fc3f7;">说明：</b>
+                <b>d'</b> 改变信号与噪音分布的分离程度；
+                <b>c</b> 是你实际使用的判断标准（蓝色实线）；
+                <b>P(S)</b> 不改变分布形状，但决定<b style="color:#ffd86b;">理论上最优的 c 位置</b>（黄色虚线），你可以对比自己的 c 是偏保守还是偏激进。
+            </div>
+        </section>
+
+        <!-- 图形区：SDT 分布 + ROC -->
+        <div class="viz-row">
+            <div class="viz-box panel" style="padding:20px 14px;">
+                <h4>📊 信号与噪音的正态分布</h4>
+                <canvas class="chart" id="concept-sdt" width="560" height="280"></canvas>
+                <div class="legend">
+                    <span class="noise"><i></i>噪音 N(0,1)</span>
+                    <span class="signal"><i></i>信号 N(d',1)</span>
+                    <span class="crit"><i></i>你的判断标准 c</span>
+                    <span class="best"><i></i>最优 c 建议</span>
+                </div>
+                <p>绿色阴影 = P(FA) 虚报率 &nbsp;|&nbsp; 橙色阴影 = P(Hit) 命中率</p>
+            </div>
+
+            <div class="viz-box panel" style="padding:20px 14px;">
+                <h4>📉 ROC 曲线</h4>
+                <canvas class="chart" id="concept-roc" width="440" height="280"></canvas>
+                <div class="legend">
+                    <span class="roc"><i></i>ROC 曲线</span>
+                    <span class="crit"><i></i>你的工作点</span>
+                    <span class="best"><i></i>最优工作点</span>
+                </div>
+                <p>曲线越向左上凸，d' 越大，辨别力越强</p>
+            </div>
+        </div>
+
+        <!-- 混淆矩阵 + SDT 指标（参考截图） -->
+        <div class="concept-grid" style="margin-top:18px;">
+            <div class="panel">
+                <h3>📋 混淆矩阵（按概率展示）</h3>
+                <div class="cm-wrap">
+                    <table class="cm">
+                        <tr>
+                            <td class="corner" colspan="2" rowspan="2" style="background:transparent; border:none;"></td>
+                            <td class="hdr" colspan="2">实际状态</td>
+                        </tr>
+                        <tr>
+                            <td class="hdr">有信号</td>
+                            <td class="hdr">无信号</td>
+                        </tr>
+                        <tr>
+                            <td class="hdr" rowspan="2" style="background:#1e3a5f;">反应</td>
+                            <td class="hdr">说“有”</td>
+                            <td class="cell-hit"  id="cm-hit">H = 0.00</td>
+                            <td class="cell-fa"   id="cm-fa">FA = 0.00</td>
+                        </tr>
+                        <tr>
+                            <td class="hdr">说“无”</td>
+                            <td class="cell-miss" id="cm-miss">M = 0.00</td>
+                            <td class="cell-cr"   id="cm-cr">CR = 0.00</td>
+                        </tr>
+                    </table>
+                </div>
+                <p style="font-size:13px; color:#7a95ab; margin-top:14px; line-height:1.7;">
+                    以上为在当前 c 与 d' 下，根据正态分布假设计算的<b>理论概率</b>。
+                </p>
+            </div>
+
+            <div class="panel">
+                <h3>🧮 SDT 指标</h3>
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="m-lbl">d'</div>
+                        <div class="m-val" id="m-dprime">1.50</div>
+                    </div>
+                    <div class="metric">
+                        <div class="m-lbl">β</div>
+                        <div class="m-val" id="m-beta">1.00</div>
+                    </div>
+                    <div class="metric">
+                        <div class="m-lbl">c</div>
+                        <div class="m-val" id="m-c">0.00</div>
+                    </div>
+                    <div class="metric wide">
+                        <div class="m-lbl">A'（非参数辨别力）</div>
+                        <div class="m-val" id="m-aprime">0.853</div>
+                    </div>
+                </div>
+                <div class="interpret" id="interpret">
+                    <b>解读：</b>d' 越大，两分布分得越开。β&gt;1=严格，β&lt;1=宽松。同一 d' 下，改变标准只改 β/c，不改 d'。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         视图 3：排行榜
+         ============================================================ -->
+    <div class="view" id="view-rank">
+        <header>
+            <h1>🏆 历史成绩排行榜</h1>
+            <p>每次完成实验后，成绩会自动记录在此。按 d' 从高到低排序。</p>
+        </header>
+
+        <section class="panel">
+            <div class="rank-controls">
+                <button class="btn-danger" id="clear-rank">🗑️ 清空记录</button>
+            </div>
+            <table class="rank-table">
+                <thead>
+                    <tr>
+                        <th>排名</th>
+                        <th>时间</th>
+                        <th>试次</th>
+                        <th>P(S)</th>
+                        <th>d'</th>
+                        <th>c</th>
+                        <th>准确率</th>
+                    </tr>
+                </thead>
+                <tbody id="rank-body">
+                    <tr><td colspan="7" class="empty">暂无记录，完成一局实验后自动生成</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+</div>
+
+<script>
+/* ============================================================
+   一、工具 & Tab 切换
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const STIMULUS_MS = 1500;
+const FEEDBACK_MS = 1400;
+
+document.querySelectorAll('.tab').forEach(tab => {
+    tab.onclick = () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        tab.classList.add('active');
+        $(tab.dataset.view).classList.add('active');
+        if (tab.dataset.view === 'view-concept') renderConcept();
+        if (tab.dataset.view === 'view-rank') renderRanking();
+    };
+});
+
+/* ============================================================
+   二、数学工具
+   ============================================================ */
+// 标准正态概率密度
+function normPDF(x) {
+    return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
+}
+// 标准正态累积分布（Abramowitz-Stegun 近似）
+function normCDF(x) {
+    const t = 1 / (1 + 0.2316419 * Math.abs(x));
+    const d = 0.3989423 * Math.exp(-x * x / 2);
+    const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    return x >= 0 ? 1 - p : p;
+}
+// 标准正态分位数（反向CDF）
+function invNorm(p) {
+    if (p <= 0) return -3.0;
+    if (p >= 1) return  3.0;
+    const pa = Math.min(Math.max(p, 0.01), 0.99);
+    const t = Math.sqrt(-2 * Math.log(pa < 0.5 ? pa : 1 - pa));
+    const c0=2.515517, c1=0.802853, c2=0.010328;
+    const d1=1.432788, d2=0.189269, d3=0.001308;
+    const z = t - (c0 + c1*t + c2*t*t) / (1 + d1*t + d2*t*t + d3*t*t*t);
+    return pa < 0.5 ? -z : z;
+}
+// 计算 d'、β、c、A'（输入为命中率、虚报率）
+function computeSDT(pHit, pFA) {
+    // 边界处理，避免无穷
+    const h = Math.min(Math.max(pHit, 0.001), 0.999);
+    const f = Math.min(Math.max(pFA,  0.001), 0.999);
+    const zH = invNorm(h);
+    const zF = invNorm(f);
+    const dPrime = zH - zF;
+    const c = -0.5 * (zH + zF);
+    // β = exp( (zF^2 - zH^2) / 2 )
+    const beta = Math.exp((zF * zF - zH * zH) / 2);
+    // A'（Grier 1971 非参数辨别力）
+    let aprime;
+    if (h >= f) {
+        aprime = 0.5 + ((h - f) * (1 + h - f)) / (4 * h * (1 - f));
+    } else {
+        aprime = 0.5 - ((f - h) * (1 + f - h)) / (4 * f * (1 - h));
+    }
+    return { dPrime, c, beta, aPrime: aprime, pHit: h, pFA: f };
+}
+// 给定 d' 与 c，反推理论上的 P(Hit)、P(FA)
+// 信号分布 N(d',1)，噪音分布 N(0,1)，判断标准 c（在噪音分布坐标系上）
+// P(Hit) = P(X > c | X~N(d',1)) = 1 - Φ(c - d')
+// P(FA)  = P(X > c | X~N(0,1))  = 1 - Φ(c)
+function sdtTheoretical(dPrime, c) {
+    const pHit = 1 - normCDF(c - dPrime);
+    const pFA  = 1 - normCDF(c);
+    return { pHit, pFA };
+}
+// 最优 c：在对称收益下，最优 c* = -ln((1-P(S))/P(S))（当 d' 已给出时，最小化总错误率）
+// 更精确推导：c* = -ln( (1-P(S)) / P(S) ) / d' + d'/2 不对；下面用标准结论：
+// 在等方差假设下，最优判断标准 c* = -ln( (1-P(S))/P(S) ) ... 但注意此时c是"相对噪音中心"的距离；
+// 若以噪音中心为 0，则最优决策边界满足：P(x|c*|Signal)·P(S) = P(x|c*|Noise)·(1-P(S))
+// 推导得 c* = d'/2 - ln((1-P(S))/P(S)) / d' 不成立。
+// 使用标准简化公式： c* = -ln((1-P(S))/P(S)) 仅当 d'=1 时成立。
+// 更通用的公式：c* = (d'/2) - (1/d')·ln((1-P(S))/P(S)) 不对。
+// 我们使用严格推导：
+//   似然比 β* = P(Noise)/P(Signal) = (1-P(S))/P(S)  (由贝叶斯最优)
+//   已知 β = exp( (zF^2 - zH^2)/2 ) = exp( d'·(c - d'/2) )
+//   反解得 c* = (1/d')·ln(β*) + d'/2 = (1/d')·ln((1-P(S))/P(S)) + d'/2
+// 检验：P(S)=0.5，d'=1 → β*=1, c*=0+0.5=0.5? 不对。应该是 c*=0。
+// 重新整理：β = exp( d'·c - d'^2/2 ) = exp( -d'·(d'/2 - c) ) → 令 β* = (1-P(S))/P(S)：
+//   d'·c - d'^2/2 = ln(β*)  →  c* = ln((1-P(S))/P(S))/d' + d'/2
+// 若 P(S)=0.5，d'=1：c* = 0 + 0.5 = 0.5，但直觉应该是 0。问题出在 c 的定义：
+// 在 SDT 中，c = -(zH + zF)/2 = d'/2 - zF … 等等。
+// 严谨：给定 c（以噪音为 0 的标准坐标），似然比 β = exp( d'·c - d'^2/2 )。
+// 想让 β = (1-P(S))/P(S) = 1（当 P(S)=0.5），得 d'·c - d'^2/2 = 0 → c = d'/2。
+// 咦？所以 c 不为 0？其实是因为 c 的定义是“信号分布中心与噪音分布中心之间，判断边界离噪音中心多远了”？
+// 标准定义：c = -(zH + zF)/2。代入 zH = d' - zF'（此处 zF' 是判断边界相对噪音的距离）
+// 我们直接用最优 c 公式：c_opt = (1/d')·ln((1-P(S))/P(S)) + d'/2 检查：
+//   P(S)=0.5, d'=1: c_opt = 0 + 0.5 = 0.5
+//   但 c = -(zH + zF)/2 = d'/2 - zF，若 P(S)=0.5，取边界正好在中间，zF = d'/2 = 0.5，则 c = 0.5 - 0.5 = 0 ✓
+// 所以公式本身没问题：c_opt = (1/d')·ln((1-P(S))/P(S)) + d'/2，但这是"以噪音分布中心到判断边界的距离"为 zF 的表示。
+// 而 c 值本身 = d'/2 - zF。若令最优时 c_opt 用 c 定义给出：
+//   zF* = d'/2 - (1/d')·ln((1-P(S))/P(S))
+//   c* = d'/2 - zF* = (1/d')·ln((1-P(S))/P(S))
+// 检验：P(S)=0.5, d'=1: c* = 0 ✓；P(S)=0.7, d'=1: c* = ln(0.3/0.7) = -0.847 ✓（负值，偏向左，符合"信号多时更倾向说有"）
+// 最终公式：c* = (1/d') · ln( (1-P(S)) / P(S) ) — 单位是标准差
+function bestC(dPrime, pS) {
+    const eps = 0.001;
+    const ps = Math.min(Math.max(pS, eps), 1 - eps);
+    // 若 d' 很小，使用 d'=1 的近似以免发散
+    const denom = Math.max(dPrime, 0.01);
+    return Math.log((1 - ps) / ps) / denom;
+}
+
+/* ============================================================
+   三、实验页逻辑
+   ============================================================ */
+const psInput = $('ps-input'), dpInput = $('dp-input');
+const psVal = $('ps-val'), dpVal = $('dp-val');
+const screenCanvas = $('screen'), rctx = screenCanvas.getContext('2d');
+const statusEl = $('status'), feedbackEl = $('feedback'), timerBar = $('timer-bar');
+const trialCountEl = $('trial-count'), clockEl = $('clock');
+const startBtn = $('start-btn'), restartBtn = $('restart-btn');
+const btnYes = $('btn-yes'), btnNo = $('btn-no');
+const resultsPanel = $('results');
+const sdtCanvas = $('sdt-canvas'), sctx = sdtCanvas.getContext('2d');
+
+psInput.oninput = () => psVal.textContent = parseFloat(psInput.value).toFixed(2);
+dpInput.oninput = () => dpVal.textContent = parseFloat(dpInput.value).toFixed(2);
+
+setInterval(() => {
+    const d = new Date();
+    clockEl.textContent =
+        `${String(d.getHours()).padStart(2,'0')}:` +
+        `${String(d.getMinutes()).padStart(2,'0')}:` +
+        `${String(d.getSeconds()).padStart(2,'0')}`;
+}, 1000);
+
+let selectedTrials = 30;
+document.querySelectorAll('.trial-btn').forEach(btn => {
+    btn.onclick = () => {
+        document.querySelectorAll('.trial-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedTrials = parseInt(btn.dataset.n);
+        trialCountEl.textContent = `— / ${selectedTrials}`;
+    };
+});
+trialCountEl.textContent = `— / ${selectedTrials}`;
+
+const S = {
+    ps: 0.5, dp: 1.5, total: 30, trial: 0,
+    isSignal: false, phase: 'idle',
+    stats: { hit:0, miss:0, fa:0, cr:0 },
+    stimulusTimer: null, prepareTimer: null, feedbackTimer: null
+};
+
+function setStatus(text, show = true) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle('show', show);
+}
+function setFeedback(type) {
+    const map = {
+        hit:  { cls:'fb-hit',  main:'✅ 命中！',   sub:'目标动物出现了，你正确识别' },
+        miss: { cls:'fb-miss', main:'❌ 漏报',     sub:'目标动物出现了，但你没发现' },
+        fa:   { cls:'fb-fa',   main:'⚠️ 虚报',     sub:'其实只是风吹草动，你误判为动物' },
+        cr:   { cls:'fb-cr',   main:'✅ 正确拒绝',  sub:'确实没有动物，你判断正确' }
+    };
+    const m = map[type];
+    feedbackEl.className = 'feedback ' + m.cls;
+    feedbackEl.innerHTML = `${m.main}<span class="sub">${m.sub}</span>`;
+    feedbackEl.classList.add('show');
+}
+function hideFeedback() { feedbackEl.classList.remove('show'); }
+
+/* ---------- Canvas 场景绘制 ---------- */
+function drawScene(isSignal, dp) {
+    const w = screenCanvas.width, h = screenCanvas.height;
+    const bgGrad = rctx.createLinearGradient(0, 0, 0, h);
+    bgGrad.addColorStop(0,   '#080410');
+    bgGrad.addColorStop(0.6, '#0d0a1a');
+    bgGrad.addColorStop(1,   '#12081e');
+    rctx.fillStyle = bgGrad;
+    rctx.fillRect(0, 0, w, h);
+
+    rctx.fillStyle = 'rgba(15,10,25,0.85)';
+    rctx.beginPath(); rctx.moveTo(0, h);
+    for (let x = 0; x <= w; x += 30) {
+        const y = h*0.72 + Math.sin(x*0.018)*18 + Math.sin(x*0.07)*6;
+        rctx.lineTo(x, y);
+    }
+    rctx.lineTo(w, h); rctx.closePath(); rctx.fill();
+
+    rctx.fillStyle = 'rgba(20,12,28,0.9)';
+    rctx.beginPath(); rctx.moveTo(0, h);
+    for (let x = 0; x <= w; x += 20) {
+        const y = h*0.85 + Math.sin(x*0.05)*4;
+        rctx.lineTo(x, y);
+    }
+    rctx.lineTo(w, h); rctx.closePath(); rctx.fill();
+
+    for (let i = 0; i < 45; i++) {
+        const x = Math.random() * w;
+        const y = h*0.25 + Math.random() * h * 0.7;
+        const r = 3 + Math.random() * 9;
+        const alpha = 0.05 + Math.random() * 0.16;
+        const g = rctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, `rgba(120,60,45,${alpha})`);
+        g.addColorStop(1, 'rgba(120,60,45,0)');
+        rctx.fillStyle = g;
+        rctx.beginPath(); rctx.arc(x, y, r, 0, Math.PI*2); rctx.fill();
+    }
+    for (let i = 0; i < 20; i++) {
+        const x = Math.random() * w;
+        const y = h*0.3 + Math.random() * h * 0.65;
+        const alpha = 0.15 + Math.random() * 0.25;
+        rctx.fillStyle = `rgba(190,120,70,${alpha})`;
+        rctx.beginPath(); rctx.arc(x, y, 0.8 + Math.random()*1.6, 0, Math.PI*2); rctx.fill();
+    }
+    if (isSignal) {
+        const sx = w*0.22 + Math.random() * w * 0.56;
+        const sy = h*0.32 + Math.random() * h * 0.48;
+        const t = Math.max(0, Math.min(1, (dp - 0.5) / 3.0));
+        const intensity = 0.12 + Math.pow(t, 1.4) * 0.88;
+        const radius = 3 + Math.pow(t, 1.2) * 19;
+        const grad = rctx.createRadialGradient(sx, sy, 0, sx, sy, radius*3.2);
+        grad.addColorStop(0,    `rgba(255,180,90,${intensity})`);
+        grad.addColorStop(0.28, `rgba(255,110,50,${intensity*0.7})`);
+        grad.addColorStop(0.62, `rgba(220,60,25,${intensity*0.28})`);
+        grad.addColorStop(1,    'rgba(220,60,25,0)');
+        rctx.fillStyle = grad;
+        rctx.beginPath(); rctx.arc(sx, sy, radius*3.2, 0, Math.PI*2); rctx.fill();
+        rctx.fillStyle = `rgba(255,235,190,${intensity})`;
+        rctx.beginPath(); rctx.arc(sx, sy, radius*0.55, 0, Math.PI*2); rctx.fill();
+    }
+    rctx.strokeStyle = 'rgba(90,220,130,0.05)';
+    rctx.lineWidth = 1;
+    for (let x = 0; x < w; x += 50) { rctx.beginPath(); rctx.moveTo(x, 0); rctx.lineTo(x, h); rctx.stroke(); }
+    for (let y = 0; y < h; y += 50) { rctx.beginPath(); rctx.moveTo(0, y); rctx.lineTo(w, y); rctx.stroke(); }
+}
+
+function clearScreen() {
+    rctx.fillStyle = '#050810';
+    rctx.fillRect(0, 0, screenCanvas.width, screenCanvas.height);
+    for (let i = 0; i < 60; i++) {
+        const x = Math.random() * screenCanvas.width;
+        const y = Math.random() * screenCanvas.height;
+        rctx.fillStyle = `rgba(120,150,180,${Math.random()*0.15})`;
+        rctx.fillRect(x, y, 1, 1);
+    }
+}
+
+/* ---------- 试次流程 ---------- */
+function startGame() {
+    S.ps = parseFloat(psInput.value);
+    S.dp = parseFloat(dpInput.value);
+    S.total = selectedTrials;
+    S.trial = 0;
+    S.stats = { hit:0, miss:0, fa:0, cr:0 };
+
+    startBtn.style.display = 'none';
+    resultsPanel.style.display = 'none';
+    btnYes.style.display = 'inline-block';
+    btnNo.style.display  = 'inline-block';
+    psInput.disabled = true;
+    dpInput.disabled = true;
+    document.querySelectorAll('.trial-btn').forEach(b => b.disabled = true);
+    nextTrial();
+}
+
+function nextTrial() {
+    if (S.trial >= S.total) { endGame(); return; }
+    S.trial++;
+    S.phase = 'stimulus';
+    S.isSignal = Math.random() < S.ps;
+    trialCountEl.textContent = `${S.trial} / ${S.total}`;
+    hideFeedback();
+    btnYes.disabled = true;
+    btnNo.disabled  = true;
+    setStatus('📡 红外相机准备中...', true);
+    rctx.fillStyle = '#050810';
+    rctx.fillRect(0, 0, screenCanvas.width, screenCanvas.height);
+
+    S.prepareTimer = setTimeout(() => {
+        setStatus('🔍 监测中...', false);
+        drawScene(S.isSignal, S.dp);
+        timerBar.style.transition = 'none';
+        timerBar.style.width = '100%';
+        timerBar.getBoundingClientRect();
+        timerBar.style.transition = `width ${STIMULUS_MS}ms linear`;
+        timerBar.style.width = '0%';
+
+        S.stimulusTimer = setTimeout(() => {
+            S.phase = 'waiting';
+            clearScreen();
+            setStatus('❓ 刚才的画面中是否有目标动物？\n请点击下方按钮作答', true);
+            btnYes.disabled = false;
+            btnNo.disabled  = false;
+        }, STIMULUS_MS);
+    }, 500 + Math.random() * 500);
+}
+
+function answer(saysSignal) {
+    if (S.phase !== 'waiting') return;
+    S.phase = 'feedback';
+    btnYes.disabled = true;
+    btnNo.disabled  = true;
+    setStatus('', false);
+
+    let resultType;
+    if (S.isSignal && saysSignal)       { S.stats.hit++;  resultType = 'hit';  }
+    else if (S.isSignal && !saysSignal) { S.stats.miss++; resultType = 'miss'; }
+    else if (!S.isSignal && saysSignal) { S.stats.fa++;   resultType = 'fa';   }
+    else                                { S.stats.cr++;   resultType = 'cr';   }
+
+    setFeedback(resultType);
+    S.feedbackTimer = setTimeout(() => {
+        hideFeedback();
+        nextTrial();
+    }, FEEDBACK_MS);
+}
+
+function endGame() {
+    S.phase = 'done';
+    btnYes.style.display = 'none';
+    btnNo.style.display  = 'none';
+    clearScreen();
+    setStatus('✅ 监测任务结束 · 正在生成报告...', true);
+    psInput.disabled = false;
+    dpInput.disabled = false;
+    document.querySelectorAll('.trial-btn').forEach(b => b.disabled = false);
+    setTimeout(() => { setStatus('', false); showResults(); }, 700);
+}
+
+function showResults() {
+    const { hit, miss, fa, cr } = S.stats;
+    const pHit = (hit + miss) > 0 ? hit / (hit + miss) : 0;
+    const pFA  = (fa  + cr)   > 0 ? fa  / (fa  + cr)   : 0;
+    const m = computeSDT(pHit, pFA);
+    const acc = ((hit + cr) / S.total * 100).toFixed(1);
+
+    $('res-hit').textContent    = hit;
+    $('res-miss').textContent   = miss;
+    $('res-fa').textContent     = fa;
+    $('res-cr').textContent     = cr;
+    $('res-phit').textContent   = pHit.toFixed(2);
+    $('res-pfa').textContent    = pFA.toFixed(2);
+    $('res-dprime').textContent = m.dPrime.toFixed(2);
+    $('res-c').textContent      = m.c.toFixed(2);
+    $('res-acc').textContent    = acc + '%';
+
+    resultsPanel.style.display = 'block';
+    resultsPanel.scrollIntoView({ behavior:'smooth', block:'start' });
+    drawSDTChart(sctx, sdtCanvas, m.dPrime, m.c);
+
+    saveRecord({
+        time: Date.now(), trials: S.total, ps: S.ps, dpParam: S.dp,
+        dPrime: m.dPrime, c: m.c, acc: parseFloat(acc),
+        hit, miss, fa, cr
+    });
+}
+
+/* ============================================================
+   四、实验页 SDT 曲线绘制
+   ============================================================ */
+function drawSDTChart(ctx, canvas, dPrime, c) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const W = canvas.width, H = canvas.height, base = H - 30;
+    const scaleX = 55;
+    const cxNoise  = W/2 - (dPrime * scaleX) / 2;
+    const cxSignal = W/2 + (dPrime * scaleX) / 2;
+
+    ctx.beginPath(); ctx.moveTo(0, base); ctx.lineTo(W, base);
+    ctx.strokeStyle = '#2a3a52'; ctx.lineWidth = 1; ctx.stroke();
+
+    function curve(cx, color) {
+        ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2.4;
+        for (let x = 0; x < W; x++) {
+            const z = (x - cx) / scaleX;
+            const y = base - normPDF(z) * scaleX * 3.0;
+            x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+    }
+    curve(cxNoise,  '#4ade80');
+    curve(cxSignal, '#ff6b3d');
+
+    const cX = cxNoise + c * scaleX;
+    ctx.beginPath();
+    ctx.moveTo(cX, 20); ctx.lineTo(cX, base);
+    ctx.strokeStyle = '#4fc3f7'; ctx.lineWidth = 2.2;
+    ctx.setLineDash([6, 5]); ctx.stroke(); ctx.setLineDash([]);
+
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = '#4ade80';
+    ctx.fillText('噪音', cxNoise - 18, base + 20);
+    ctx.fillStyle = '#ff6b3d';
+    ctx.fillText('信号', cxSignal - 18, base + 20);
+    ctx.fillStyle = '#4fc3f7';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(`c = ${c.toFixed(2)}`, cX - 26, 16);
+}
+
+/* ============================================================
+   五、概念可视化
+   ============================================================ */
+const cDp = $('c-dp'), cCrit = $('c-crit'), cPs = $('c-ps'), cAlpha = $('c-alpha');
+const cDpVal = $('c-dp-val'), cCritVal = $('c-c-val'), cPsVal = $('c-ps-val'), cAlphaVal = $('c-alpha-val');
+const conceptSDT = $('concept-sdt'), csCtx = conceptSDT.getContext('2d');
+const conceptROC = $('concept-roc'), crCtx = conceptROC.getContext('2d');
+
+[cDp, cCrit, cPs, cAlpha].forEach(el => el.addEventListener('input', renderConcept));
+
+function renderConcept() {
+    const dp = parseFloat(cDp.value);
+    const c  = parseFloat(cCrit.value);
+    const ps = parseFloat(cPs.value);
+    const alpha = parseFloat(cAlpha.value);
+
+    cDpVal.textContent = dp.toFixed(2);
+    cCritVal.textContent = c.toFixed(2);
+    cPsVal.textContent = ps.toFixed(2);
+    cAlphaVal.textContent = alpha.toFixed(2);
+
+    drawConceptSDT(dp, c, ps, alpha);
+    drawConceptROC(dp, c, ps, alpha);
+    updateConceptMetrics(dp, c, ps);
+}
+
+/* ---------- 概念 SDT 分布图（含阴影、最优 c） ---------- */
+function drawConceptSDT(dp, c, ps, alpha) {
+    const W = conceptSDT.width, H = conceptSDT.height, base = H - 34;
+    const topY = 40;
+    const scaleX = 55;
+    const cxNoise  = W/2 - (dp * scaleX) / 2;
+    const cxSignal = W/2 + (dp * scaleX) / 2;
+    const k = (base - topY) / normPDF(0);
+
+    csCtx.clearRect(0, 0, W, H);
+
+    // 底轴
+    csCtx.beginPath(); csCtx.moveTo(0, base); csCtx.lineTo(W, base);
+    csCtx.strokeStyle = '#2a3a52'; csCtx.lineWidth = 1; csCtx.stroke();
+
+    const cXpix = cxNoise + c * scaleX;
+
+    // 阴影：P(FA)——噪音分布下 c 右侧
+    csCtx.beginPath();
+    csCtx.moveTo(Math.max(0, cXpix), base);
+    for (let x = Math.max(0, cXpix); x < W; x++) {
+        const z = (x - cxNoise) / scaleX;
+        csCtx.lineTo(x, base - normPDF(z) * k);
+    }
+    csCtx.lineTo(W, base); csCtx.closePath();
+    csCtx.fillStyle = `rgba(74,222,128,${alpha * 0.4})`;
+    csCtx.fill();
+
+    // 阴影：P(Hit)——信号分布下 c 右侧
+    csCtx.beginPath();
+    csCtx.moveTo(Math.max(0, cXpix), base);
+    for (let x = Math.max(0, cXpix); x < W; x++) {
+        const z = (x - cxSignal) / scaleX;
+        csCtx.lineTo(x, base - normPDF(z) * k);
+    }
+    csCtx.lineTo(W, base); csCtx.closePath();
+    csCtx.fillStyle = `rgba(255,107,61,${alpha * 0.4})`;
+    csCtx.fill();
+
+    // 噪音曲线
+    csCtx.beginPath(); csCtx.strokeStyle = '#4ade80'; csCtx.lineWidth = 2.4;
+    for (let x = 0; x < W; x++) {
+        const z = (x - cxNoise) / scaleX;
+        const y = base - normPDF(z) * k;
+        x === 0 ? csCtx.moveTo(x, y) : csCtx.lineTo(x, y);
+    }
+    csCtx.stroke();
+
+    // 信号曲线
+    csCtx.beginPath(); csCtx.strokeStyle = '#ff6b3d'; csCtx.lineWidth = 2.4;
+    for (let x = 0; x < W; x++) {
+        const z = (x - cxSignal) / scaleX;
+        const y = base - normPDF(z) * k;
+        x === 0 ? csCtx.moveTo(x, y) : csCtx.lineTo(x, y);
+    }
+    csCtx.stroke();
+
+    // 最优 c 建议线
+    const cOpt = bestC(dp, ps);
+    const cOptPix = cxNoise + cOpt * scaleX;
+    csCtx.beginPath();
+    csCtx.moveTo(cOptPix, topY - 20);
+    csCtx.lineTo(cOptPix, base);
+    csCtx.strokeStyle = '#ffd86b';
+    csCtx.lineWidth = 2.2;
+    csCtx.setLineDash([4, 6]);
+    csCtx.stroke();
+    csCtx.setLineDash([]);
+
+    // 你的 c 线
+    csCtx.beginPath();
+    csCtx.moveTo(cXpix, topY - 20);
+    csCtx.lineTo(cXpix, base);
+    csCtx.strokeStyle = '#4fc3f7';
+    csCtx.lineWidth = 2.4;
+    csCtx.stroke();
+
+    // 标注
+    csCtx.font = 'bold 13.5px sans-serif';
+    csCtx.fillStyle = '#4ade80';
+    csCtx.fillText('噪音', cxNoise - 16, base + 20);
+    csCtx.fillStyle = '#ff6b3d';
+    csCtx.fillText('信号', cxSignal - 16, base + 20);
+    csCtx.fillStyle = '#4fc3f7';
+    csCtx.fillText(`c = ${c.toFixed(2)}`, cXpix - 26, topY - 26);
+    csCtx.fillStyle = '#ffd86b';
+    csCtx.fillText(`c* = ${cOpt.toFixed(2)}`, cOptPix - 30, topY - 6);
+
+    // P(Hit)/P(FA) 数值
+    const { pHit, pFA } = sdtTheoretical(dp, c);
+    csCtx.fillStyle = '#ff9a3c';
+    csCtx.font = 'bold 14px sans-serif';
+    csCtx.fillText(`P(Hit) = ${pHit.toFixed(2)}`, 14, 22);
+    csCtx.fillStyle = '#4ade80';
+    csCtx.fillText(`P(FA) = ${pFA.toFixed(2)}`, 14, 42);
+}
+
+/* ---------- 概念 ROC 曲线（含最优工作点） ---------- */
+function drawConceptROC(dp, c, ps, alpha) {
+    const W = conceptROC.width, H = conceptROC.height;
+    const pad = 44;
+    const plotW = W - pad * 2, plotH = H - pad * 2;
+
+    crCtx.clearRect(0, 0, W, H);
+
+    // 网格
+    crCtx.strokeStyle = 'rgba(90,140,180,0.1)';
+    crCtx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+        const x = pad + plotW * i / 10;
+        const y = pad + plotH * i / 10;
+        crCtx.beginPath(); crCtx.moveTo(x, pad); crCtx.lineTo(x, pad + plotH); crCtx.stroke();
+        crCtx.beginPath(); crCtx.moveTo(pad, y); crCtx.lineTo(pad + plotW, y); crCtx.stroke();
+    }
+    // 坐标轴
+    crCtx.strokeStyle = '#4a5b73'; crCtx.lineWidth = 1.6;
+    crCtx.beginPath();
+    crCtx.moveTo(pad, pad); crCtx.lineTo(pad, pad + plotH); crCtx.lineTo(pad + plotW, pad + plotH);
+    crCtx.stroke();
+
+    // 轴标签
+    crCtx.fillStyle = '#8fa9bd'; crCtx.font = '13px sans-serif';
+    crCtx.fillText('P(FA) →', pad + plotW / 2 - 30, pad + plotH + 26);
+    crCtx.save();
+    crCtx.translate(16, pad + plotH / 2 + 30);
+    crCtx.rotate(-Math.PI / 2);
+    crCtx.fillText('P(Hit) →', 0, 0);
+    crCtx.restore();
+
+    // 对角线
+    crCtx.strokeStyle = 'rgba(120,150,180,0.35)'; crCtx.lineWidth = 1.4;
+    crCtx.setLineDash([5, 5]);
+    crCtx.beginPath(); crCtx.moveTo(pad, pad + plotH); crCtx.lineTo(pad + plotW, pad);
+    crCtx.stroke(); crCtx.setLineDash([]);
+
+    // ROC 曲线
+    crCtx.beginPath(); crCtx.strokeStyle = '#ffd86b'; crCtx.lineWidth = 2.6;
+    let started = false;
+    for (let cv = -4; cv <= 4; cv += 0.05) {
+        const pFA  = 1 - normCDF(cv);
+        const pHit = 1 - normCDF(cv - dp);
+        const x = pad + plotW * pFA;
+        const y = pad + plotH * (1 - pHit);
+        if (!started) { crCtx.moveTo(x, y); started = true; }
+        else crCtx.lineTo(x, y);
+    }
+    crCtx.stroke();
+
+    // 你的工作点
+    const curPFA  = 1 - normCDF(c);
+    const curPHit = 1 - normCDF(c - dp);
+    const px = pad + plotW * curPFA;
+    const py = pad + plotH * (1 - curPHit);
+    crCtx.beginPath();
+    crCtx.fillStyle = '#4fc3f7';
+    crCtx.arc(px, py, 8, 0, Math.PI * 2); crCtx.fill();
+    crCtx.strokeStyle = '#fff'; crCtx.lineWidth = 1.5; crCtx.stroke();
+    crCtx.fillStyle = '#4fc3f7'; crCtx.font = 'bold 13px sans-serif';
+    crCtx.fillText(`(${curPFA.toFixed(2)}, ${curPHit.toFixed(2)})`, px + 12, py - 10);
+
+    // 最优工作点
+    const cOpt = bestC(dp, ps);
+    const optPFA  = 1 - normCDF(cOpt);
+    const optPHit = 1 - normCDF(cOpt - dp);
+    const ox = pad + plotW * optPFA;
+    const oy = pad + plotH * (1 - optPHit);
+    crCtx.beginPath();
+    crCtx.fillStyle = '#ffd86b';
+    crCtx.arc(ox, oy, 7, 0, Math.PI * 2); crCtx.fill();
+    crCtx.strokeStyle = '#fff'; crCtx.lineWidth = 1.5; crCtx.stroke();
+    crCtx.fillStyle = '#ffd86b';
+    crCtx.fillText(`最优 (${optPFA.toFixed(2)}, ${optPHit.toFixed(2)})`, ox + 10, oy + 20);
+
+    // d' 显示
+    crCtx.fillStyle = '#ffd86b'; crCtx.font = 'bold 14px sans-serif';
+    crCtx.fillText(`d' = ${dp.toFixed(2)}`, pad + 6, pad + 18);
+}
+
+/* ---------- 更新混淆矩阵与 SDT 指标 ---------- */
+function updateConceptMetrics(dp, c, ps) {
+    const { pHit, pFA } = sdtTheoretical(dp, c);
+    const pMiss = 1 - pHit;
+    const pCR   = 1 - pFA;
+
+    // 混淆矩阵（理论概率）
+    $('cm-hit').textContent  = `H = ${pHit.toFixed(2)}`;
+    $('cm-fa').textContent   = `FA = ${pFA.toFixed(2)}`;
+    $('cm-miss').textContent = `M = ${pMiss.toFixed(2)}`;
+    $('cm-cr').textContent   = `CR = ${pCR.toFixed(2)}`;
+
+    // SDT 指标
+    const m = computeSDT(pHit, pFA);
+    $('m-dprime').textContent = m.dPrime.toFixed(2);
+    $('m-beta').textContent   = m.beta.toFixed(2);
+    $('m-c').textContent      = m.c.toFixed(2);
+    $('m-aprime').textContent = m.aPrime.toFixed(3);
+
+    // 解读文字
+    const cOpt = bestC(dp, ps);
+    const diff = c - cOpt;
+    let advice;
+    if (Math.abs(diff) < 0.15) {
+        advice = '你的判断标准接近最优，很好地平衡了收益与错误。';
+    } else if (diff > 0) {
+        advice = '你的判断标准比最优位置<b>偏右</b>（更严格）：倾向于说"没有信号"，会导致漏报增多。';
+    } else {
+        advice = '你的判断标准比最优位置<b>偏左</b>（更宽松）：倾向于说"有信号"，会导致虚报增多。';
+    }
+    $('interpret').innerHTML =
+        `<b>解读：</b>当前 d' = ${dp.toFixed(2)}，` +
+        `理论上两分布分离程度对应辨别力 ${dp >= 2.5 ? '强' : dp >= 1.5 ? '中' : '弱'}。` +
+        `β = ${m.beta.toFixed(2)}（${m.beta > 1.05 ? '偏严格' : m.beta < 0.95 ? '偏宽松' : '平衡'}）。` +
+        `<br>P(S) = ${ps.toFixed(2)} 下的最优判断标准为 c* = ${cOpt.toFixed(2)}。${advice}`;
+}
+
+/* ============================================================
+   六、排行榜
+   ============================================================ */
+const RANK_KEY = 'sdt_lab_ranking_v1';
+function loadRecords() {
+    try { return JSON.parse(localStorage.getItem(RANK_KEY)) || []; }
+    catch(e) { return []; }
+}
+function saveRecord(rec) {
+    const list = loadRecords();
+    list.push(rec);
+    localStorage.setItem(RANK_KEY, JSON.stringify(list));
+}
+function renderRanking() {
+    const list = loadRecords().sort((a, b) => b.dPrime - a.dPrime);
+    const tbody = $('rank-body');
+    if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty">暂无记录，完成一局实验后自动生成</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = list.map((r, i) => {
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+        const dCls = r.dPrime >= 2 ? 'good' : r.dPrime >= 1 ? 'mid' : 'bad';
+        const aCls = r.acc >= 80 ? 'good' : r.acc >= 60 ? 'mid' : 'bad';
+        const t = new Date(r.time);
+        const timeStr = `${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+        return `<tr>
+            <td class="medal">${medal}</td>
+            <td>${timeStr}</td>
+            <td>${r.trials}</td>
+            <td>${r.ps.toFixed(2)}</td>
+            <td><span class="badge ${dCls}">${r.dPrime.toFixed(2)}</span></td>
+            <td>${r.c.toFixed(2)}</td>
+            <td><span class="badge ${aCls}">${r.acc.toFixed(1)}%</span></td>
+        </tr>`;
+    }).join('');
+}
+$('clear-rank').onclick = () => {
+    if (confirm('确定清空所有历史记录吗？')) {
+        localStorage.removeItem(RANK_KEY);
+        renderRanking();
+    }
+};
+
+/* ============================================================
+   七、实验页事件绑定
+   ============================================================ */
+startBtn.onclick = startGame;
+restartBtn.onclick = () => {
+    resultsPanel.style.display = 'none';
+    btnYes.style.display = 'none';
+    btnNo.style.display  = 'none';
+    startBtn.style.display = 'inline-block';
+    startBtn.disabled = false;
+    setStatus('准备就绪 · 点击下方开始按钮', true);
+    clearScreen();
+};
+btnYes.onclick = () => answer(true);
+btnNo.onclick  = () => answer(false);
+
+/* ============================================================
+   八、初始化
+   ============================================================ */
+clearScreen();
+renderConcept();
+</script>
+</body>
+</html>
